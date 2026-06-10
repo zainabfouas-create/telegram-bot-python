@@ -118,7 +118,11 @@ async def list_admins() -> list[dict]:
 
 # ── Referral ──────────────────────────────────────────────────────────────────
 
+_PENDING_REFERRAL_LIMIT = 30  # max unconfirmed referrals per referrer (anti-flood)
+
 async def process_referral(new_user_id: int, referrer_tg_id: int) -> dict:
+    """Record who referred the new user. Reward is NOT given here — it fires
+    after the referred user completes their first purchase (see confirm_referral)."""
     null_result = {"rewarded": False, "reward_amount": 0, "referrer_id": None,
                    "referrer_telegram_id": None, "referrer_language": None}
     referrer = await get_user_by_telegram_id(referrer_tg_id)
@@ -127,25 +131,69 @@ async def process_referral(new_user_id: int, referrer_tg_id: int) -> dict:
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        async with conn.transaction():
-            assigned = await conn.fetchval(
-                "UPDATE users SET referred_by=$1 WHERE id=$2 AND referred_by IS NULL RETURNING id",
-                referrer["id"], new_user_id,
-            )
-            if not assigned:
-                return {"rewarded": False, "reward_amount": 0,
-                        "referrer_id": referrer["id"],
-                        "referrer_telegram_id": referrer["telegram_id"],
-                        "referrer_language": referrer["language"]}
+        # Anti-flood: count pending (unconfirmed) referrals for this referrer
+        pending = await conn.fetchval(
+            """SELECT COUNT(*) FROM users u
+               WHERE u.referred_by=$1
+               AND NOT EXISTS (
+                   SELECT 1 FROM orders o
+                   WHERE o.user_id = u.id AND o.status = 'completed'
+               )""",
+            referrer["id"],
+        )
+        if (pending or 0) >= _PENDING_REFERRAL_LIMIT:
+            return null_result
 
-            ref_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM users WHERE referred_by=$1", referrer["id"]
-            )
+        # Just assign referred_by; no reward yet
+        assigned = await conn.fetchval(
+            "UPDATE users SET referred_by=$1 WHERE id=$2 AND referred_by IS NULL RETURNING id",
+            referrer["id"], new_user_id,
+        )
+        if not assigned:
+            return null_result
+
+        return {"rewarded": False, "reward_amount": 0,
+                "referrer_id": referrer["id"],
+                "referrer_telegram_id": referrer["telegram_id"],
+                "referrer_language": referrer["language"]}
+
+
+async def confirm_referral(buyer_user_id: int) -> dict:
+    """Called after a user completes their FIRST purchase.
+    If they were referred, check milestones and reward the referrer."""
+    null_result = {"rewarded": False, "reward_amount": 0, "referrer_id": None,
+                   "referrer_telegram_id": None, "referrer_language": None}
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        buyer = await conn.fetchrow("SELECT referred_by FROM users WHERE id=$1", buyer_user_id)
+        if not buyer or not buyer["referred_by"]:
+            return null_result
+
+        # Only fire on first completed order
+        order_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='completed'",
+            buyer_user_id,
+        )
+        if (order_count or 0) != 1:
+            return null_result
+
+        async with conn.transaction():
             ref = await conn.fetchrow(
-                "SELECT * FROM users WHERE id=$1 FOR UPDATE", referrer["id"]
+                "SELECT * FROM users WHERE id=$1 FOR UPDATE", buyer["referred_by"]
             )
             if not ref:
                 return null_result
+
+            # Count only confirmed referrals (with at least one completed order)
+            ref_count = await conn.fetchval(
+                """SELECT COUNT(*) FROM users u
+                   WHERE u.referred_by=$1
+                   AND EXISTS (
+                       SELECT 1 FROM orders o
+                       WHERE o.user_id = u.id AND o.status = 'completed'
+                   )""",
+                ref["id"],
+            )
 
             milestones_earned = ref_count // REFERRAL_MILESTONE
             new_batches = milestones_earned - ref["referral_rewards_claimed"]
@@ -165,7 +213,7 @@ async def process_referral(new_user_id: int, referrer_tg_id: int) -> dict:
                 """INSERT INTO balance_transactions(user_id,amount,type,description,balance_after)
                    VALUES($1,$2,'referral',$3,$4)""",
                 ref["id"], str(reward_amount),
-                f"Referral reward ({ref_count} referrals)", str(new_balance),
+                f"Referral reward ({ref_count} confirmed referrals)", str(new_balance),
             )
             return {"rewarded": True, "reward_amount": reward_amount,
                     "referrer_id": ref["id"],
@@ -174,8 +222,31 @@ async def process_referral(new_user_id: int, referrer_tg_id: int) -> dict:
 
 
 async def get_referral_count(uid: int) -> int:
+    """Return count of CONFIRMED referrals (made a purchase)."""
     pool = await get_pool()
-    return await pool.fetchval("SELECT COUNT(*) FROM users WHERE referred_by=$1", uid) or 0
+    return await pool.fetchval(
+        """SELECT COUNT(*) FROM users u
+           WHERE u.referred_by=$1
+           AND EXISTS (
+               SELECT 1 FROM orders o
+               WHERE o.user_id = u.id AND o.status = 'completed'
+           )""",
+        uid,
+    ) or 0
+
+
+async def get_pending_referral_count(uid: int) -> int:
+    """Return count of pending referrals (registered but haven't purchased yet)."""
+    pool = await get_pool()
+    return await pool.fetchval(
+        """SELECT COUNT(*) FROM users u
+           WHERE u.referred_by=$1
+           AND NOT EXISTS (
+               SELECT 1 FROM orders o
+               WHERE o.user_id = u.id AND o.status = 'completed'
+           )""",
+        uid,
+    ) or 0
 
 
 # ── Categories ────────────────────────────────────────────────────────────────
