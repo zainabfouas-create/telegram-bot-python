@@ -146,17 +146,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     payload = context.args[0] if context.args else None
     referrer_tg_id = parse_referral_payload(payload)
     if referrer_tg_id and referrer_tg_id != user["telegram_id"]:
-        result = await svc.process_referral(user["id"], referrer_tg_id)
-        if result["rewarded"]:
-            ref_lang = result["referrer_language"] or "ar"
-            try:
-                await context.bot.send_message(
-                    result["referrer_telegram_id"],
-                    t(ref_lang, "referralRewardEarned", fmt_amount(result["reward_amount"])),
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception:
-                pass
+        await svc.process_referral(user["id"], referrer_tg_id)
+        # Reward is sent to referrer only after referred user makes a purchase
 
     if not await check_channel(update, context, user):
         return
@@ -249,19 +240,28 @@ async def menu_referral(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     bot_username = get_bot_username()
     ref_link = f"https://t.me/{bot_username}?start=ref_{user['telegram_id']}" if bot_username else "—"
     ref_count = await svc.get_referral_count(user["id"])
+    pending_count = await svc.get_pending_referral_count(user["id"])
     claimed = user.get("referral_rewards_claimed", 0) or 0
     next_milestone = REFERRAL_MILESTONE - (ref_count % REFERRAL_MILESTONE)
     next_msg = ""
     if not (ref_count % REFERRAL_MILESTONE == 0 and ref_count > 0):
         if lang == "ar":
-            next_msg = f"\n⏳ تبقى {next_milestone} أصدقاء للمكافأة القادمة"
+            next_msg = f"\n⏳ تبقى {next_milestone} مؤكد للمكافأة القادمة"
         else:
-            next_msg = f"\n⏳ {next_milestone} more friends until next reward"
+            next_msg = f"\n⏳ {next_milestone} more confirmed until next reward"
+
+    pending_msg = ""
+    if pending_count > 0:
+        if lang == "ar":
+            pending_msg = f"\n🕐 {pending_count} معلق (لم يشتروا بعد)"
+        else:
+            pending_msg = f"\n🕐 {pending_count} pending (haven't purchased yet)"
 
     text = (
         t(lang, "referralTitle") + "\n\n" +
         t(lang, "referralInfo", REFERRAL_MILESTONE, fmt_amount(REFERRAL_REWARD)) + "\n\n" +
         t(lang, "referralStats", ref_count, claimed) +
+        pending_msg +
         next_msg + "\n\n" +
         t(lang, "referralLinkLabel") + "\n" +
         f"<code>{ref_link}</code>"
@@ -377,6 +377,18 @@ async def buy_product(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                      escape_html(result["content"] or ""),
                      fmt_amount(result["new_balance"]))
             await safe_edit(update, text, InlineKeyboardMarkup([[back_button("menu:main", lang)]]))
+            # Confirm referral after first successful purchase
+            try:
+                ref_result = await svc.confirm_referral(user["id"])
+                if ref_result["rewarded"]:
+                    ref_lang = ref_result["referrer_language"] or "ar"
+                    await context.bot.send_message(
+                        ref_result["referrer_telegram_id"],
+                        t(ref_lang, "referralRewardEarned", fmt_amount(ref_result["reward_amount"])),
+                        parse_mode=ParseMode.HTML,
+                    )
+            except Exception:
+                pass
     except svc.ServiceError as e:
         await update.callback_query.answer(str(e), show_alert=True)
     except Exception:
