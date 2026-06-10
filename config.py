@@ -15,6 +15,9 @@ REFERRAL_MILESTONE: int = int(os.getenv("REFERRAL_MILESTONE", "10"))
 REFERRAL_REWARD: float = float(os.getenv("REFERRAL_REWARD", "0.30"))
 
 TRON_WALLET: str = os.getenv("TRON_WALLET_ADDRESS", "")
+ETH_WALLET: str = os.getenv("ETH_WALLET_ADDRESS", "")
+ETHERSCAN_API_KEY: str = os.getenv("ETHERSCAN_API_KEY", "")
+APT_WALLET: str = os.getenv("APT_WALLET_ADDRESS", "")
 
 _bot_username: str = ""
 
