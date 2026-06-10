@@ -21,6 +21,7 @@ from keyboards import main_menu_keyboard, back_button, language_keyboard, admin_
 from database import init_db
 import services as svc
 from tronscan import verify_tron_tx
+from chainverify import verify_eth_tx, verify_aptos_tx
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,6 +35,20 @@ if config.TRON_WALLET:
         "name": "TRON (TRC20/USDT)",
         "symbol": "USDT/TRX",
         "wallet_address": config.TRON_WALLET,
+    }
+if config.ETH_WALLET and config.ETHERSCAN_API_KEY:
+    CHAINS["eth"] = {
+        "key": "eth",
+        "name": "Ethereum (ETH / USDT ERC20)",
+        "symbol": "ETH/USDT",
+        "wallet_address": config.ETH_WALLET,
+    }
+if config.APT_WALLET:
+    CHAINS["apt"] = {
+        "key": "apt",
+        "name": "Aptos (APT)",
+        "symbol": "APT",
+        "wallet_address": config.APT_WALLET,
     }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -606,7 +621,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             context.user_data.pop("awaiting", None)
             await update.message.reply_text(t(lang, "verifying", chain["name"]))
             try:
-                result = await verify_tron_tx(tx_hash, chain["wallet_address"])
+                if chain_key == "eth":
+                    result = await verify_eth_tx(tx_hash, chain["wallet_address"], config.ETHERSCAN_API_KEY)
+                elif chain_key == "apt":
+                    result = await verify_aptos_tx(tx_hash, chain["wallet_address"])
+                else:
+                    result = await verify_tron_tx(tx_hash, chain["wallet_address"])
                 if not result.verified:
                     await update.message.reply_html(
                         t(lang, "verificationFailed", result.error or "Verification failed"),
