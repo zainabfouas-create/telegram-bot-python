@@ -1,13 +1,28 @@
 import asyncpg
+import ssl
 from config import DATABASE_URL
 
 _pool: asyncpg.Pool | None = None
 
 
+def _get_ssl():
+    if "railway.internal" in DATABASE_URL:
+        return None
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+        _pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=1,
+            max_size=10,
+            ssl=_get_ssl(),
+        )
     return _pool
 
 
