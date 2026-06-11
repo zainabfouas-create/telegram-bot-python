@@ -55,5 +55,6 @@ def admin_menu_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
             InlineKeyboardButton(t(lang, "adminStats"), callback_data="adm:stats"),
             InlineKeyboardButton(t(lang, "adminChannelMenu"), callback_data="adm:channel"),
         ],
+        [InlineKeyboardButton(t(lang, "adminBroadcast"), callback_data="adm:broadcast")],
         [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
     ])
