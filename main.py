@@ -653,14 +653,37 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     await svc.cancel_pending_recharge(req["id"])
                     await update.message.reply_text(t(lang, "binancePayError"))
             else:
-                # Fallback: manual confirmation (no API keys configured)
-                await update.message.reply_text(
-                    t(lang, "rechargeSuccess", str(req["id"]), fmt_amount(amount))
+                # Manual flow: guide user to pay via Merchant ID, then submit Order ID
+                context.user_data["awaiting"] = {
+                    "action": "binance_recharge_orderid",
+                    "data": {"req_id": req["id"], "amount": amount},
+                }
+                mid = config.BINANCE_PAY_MERCHANT_ID
+                await update.message.reply_html(
+                    t(lang, "binanceTitle") + "\n\n" +
+                    t(lang, "binanceInstructions", mid) + "\n\n" +
+                    t(lang, "binanceManualOrderPrompt", fmt_amount(amount)),
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
                 )
-                await notify_admins(
-                    context.bot,
-                    f"🟡 Binance Pay #{req['id']}\nAmount: {fmt_amount(amount)}\nTrade No: <code>{trade_no}</code>\nClient: {escape_html(user.get('first_name') or '')} ({user['telegram_id']})",
-                )
+
+        elif action == "binance_recharge_orderid":
+            order_id_str = text.strip()
+            if not order_id_str:
+                await update.message.reply_text(t(lang, "invalidNumber"))
+                return
+            req_id = int(data.get("req_id", 0))
+            amount = float(data.get("amount", 0))
+            context.user_data.pop("awaiting", None)
+            await svc.set_recharge_external_ref(req_id, order_id_str)
+            await update.message.reply_text(t(lang, "rechargeSuccess", str(req_id), fmt_amount(amount)))
+            await notify_admins(
+                context.bot,
+                f"🟡 <b>Binance Pay #{req_id}</b>\n"
+                f"Amount: {fmt_amount(amount)}\n"
+                f"Order ID: <code>{escape_html(order_id_str)}</code>\n"
+                f"Client: {escape_html(user.get('first_name') or '')} ({user['telegram_id']})\n\n"
+                f"Review from «Admin Panel ← Recharge Requests».",
+            )
 
         elif action == "manual_recharge_amount":
             try:
