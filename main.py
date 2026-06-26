@@ -23,6 +23,7 @@ import services as svc
 from tronscan import verify_tron_tx
 from chainverify import verify_eth_tx, verify_aptos_tx
 import binancepay as bp
+import binanceapi as bapi
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -530,8 +531,20 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
         await update.callback_query.answer(t(lang, "binanceNotPaid"), show_alert=True)
         return
 
-    result = await bp.query_order(config.BINANCE_API_KEY, config.BINANCE_SECRET_KEY, trade_no)
-    if result.paid:
+    parts = update.callback_query.data.split(":")
+    if len(parts) < 4:
+        return
+    req_id = int(parts[1])
+    unique_cents = int(parts[2])
+    start_time_s = int(parts[3])
+    unique_amount = unique_cents / 100.0
+    start_time_ms = start_time_s * 1000
+
+    result = await bapi.verify_payment(
+        config.BINANCE_API_KEY, config.BINANCE_SECRET_KEY,
+        unique_amount, start_time_ms,
+    )
+    if result.verified:
         approved = await svc.approve_recharge(req_id)
         if approved:
             await update.callback_query.edit_message_text(
@@ -638,20 +651,21 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await svc.set_recharge_external_ref(req["id"], trade_no)
 
             if config.BINANCE_API_KEY and config.BINANCE_SECRET_KEY:
-                order = await bp.create_order(config.BINANCE_API_KEY, config.BINANCE_SECRET_KEY, trade_no, amount)
-                if order.success:
-                    keyboard = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(t(lang, "binancePayBtn"), url=order.checkout_url)],
-                        [InlineKeyboardButton(t(lang, "binanceCheckBtn"), callback_data=f"binance_check:{req['id']}:{trade_no}")],
-                        [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
-                    ])
-                    await update.message.reply_html(
-                        t(lang, "binanceTitle") + "\n\n" + t(lang, "binanceCheckoutMsg", fmt_amount(amount), trade_no),
-                        reply_markup=keyboard,
-                    )
-                else:
-                    await svc.cancel_pending_recharge(req["id"])
-                    await update.message.reply_text(t(lang, "binancePayError"))
+                # Auto flow: unique amount trick — user transfers exact amount, bot verifies
+                unique_amount = bapi.generate_unique_amount(amount)
+                unique_cents = int(round(unique_amount * 100))
+                start_time_s = int(__import__("time").time())
+                await svc.set_recharge_external_ref(req["id"], f"auto_{unique_cents}_{start_time_s}")
+                mid = config.BINANCE_PAY_MERCHANT_ID
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(t(lang, "binanceCheckBtn"), callback_data=f"binance_check:{req['id']}:{unique_cents}:{start_time_s}")],
+                    [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
+                ])
+                await update.message.reply_html(
+                    t(lang, "binanceTitle") + "\n\n" +
+                    t(lang, "binanceUniqueTransfer", unique_amount, mid),
+                    reply_markup=keyboard,
+                )
             else:
                 # Manual flow: guide user to pay via Merchant ID, then submit Order ID
                 context.user_data["awaiting"] = {
@@ -1683,7 +1697,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(rcstars_amount, pattern=r"^rcstars:\d+$"))
     app.add_handler(CallbackQueryHandler(rc_manual, pattern="^rc:manual$"))
     app.add_handler(CallbackQueryHandler(rc_binance, pattern="^rc:binance$"))
-    app.add_handler(CallbackQueryHandler(check_binance_payment, pattern=r"^binance_check:\d+:\w+$"))
+    app.add_handler(CallbackQueryHandler(check_binance_payment, pattern=r"^binance_check:\d+:\d+:\d+$"))
     app.add_handler(CallbackQueryHandler(rc_chain, pattern=r"^rc:chain:\w+$"))
 
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
