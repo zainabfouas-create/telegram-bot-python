@@ -427,6 +427,8 @@ async def menu_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         [InlineKeyboardButton(t(lang, "starsBtn"), callback_data="rc:stars")],
         [InlineKeyboardButton(t(lang, "manualBtn"), callback_data="rc:manual")],
     ]
+    if config.BINANCE_PAY_MERCHANT_ID:
+        rows.append([InlineKeyboardButton(t(lang, "binanceBtn"), callback_data="rc:binance")])
     for key, chain in CHAINS.items():
         rows.append([InlineKeyboardButton(f"💎 {chain['name']}", callback_data=f"rc:chain:{key}")])
     rows.append([back_button("menu:main", lang)])
@@ -490,6 +492,23 @@ async def rc_manual(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await safe_edit(
         update,
         t(lang, "manualTitle") + "\n\n" + t(lang, "manualPrompt"),
+        InlineKeyboardMarkup([[back_button("menu:recharge", lang)]]),
+    )
+
+
+async def rc_binance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = await ensure_user(update, context)
+    if not user:
+        return
+    await update.callback_query.answer()
+    lang = user.get("language", "ar")
+    mid = config.BINANCE_PAY_MERCHANT_ID
+    context.user_data["awaiting"] = {"action": "binance_recharge_amount"}
+    await safe_edit(
+        update,
+        t(lang, "binanceTitle") + "\n\n" +
+        t(lang, "binanceInstructions", mid) + "\n\n" +
+        t(lang, "binanceAmountPrompt"),
         InlineKeyboardMarkup([[back_button("menu:recharge", lang)]]),
     )
 
@@ -573,7 +592,36 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     data = awaiting.get("data", {})
 
     try:
-        if action == "manual_recharge_amount":
+        if action == "binance_recharge_amount":
+            try:
+                amount = float(text)
+                if amount <= 0:
+                    raise ValueError
+            except ValueError:
+                await update.message.reply_text(t(lang, "invalidNumber"))
+                return
+            context.user_data["awaiting"] = {"action": "binance_recharge_orderid",
+                                              "data": {"amount": amount}}
+            await update.message.reply_html(t(lang, "binanceOrderIdPrompt"))
+
+        elif action == "binance_recharge_orderid":
+            order_id_str = text.strip()
+            if not order_id_str:
+                await update.message.reply_text(t(lang, "invalidNumber"))
+                return
+            amount = float(data.get("amount", 0))
+            context.user_data.pop("awaiting", None)
+            req = await svc.create_recharge_request(user["id"], amount, "binance")
+            await svc.set_recharge_external_ref(req["id"], order_id_str)
+            await update.message.reply_text(t(lang, "rechargeSuccess", str(req["id"]), fmt_amount(amount)))
+            await notify_admins(
+                context.bot,
+                t(lang, "binanceNotify", str(req["id"]), fmt_amount(amount),
+                  order_id_str,
+                  f"{escape_html(user.get('first_name') or '')} ({user['telegram_id']})"),
+            )
+
+        elif action == "manual_recharge_amount":
             try:
                 amount = float(text)
                 if amount <= 0:
@@ -1570,6 +1618,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(rc_stars, pattern="^rc:stars$"))
     app.add_handler(CallbackQueryHandler(rcstars_amount, pattern=r"^rcstars:\d+$"))
     app.add_handler(CallbackQueryHandler(rc_manual, pattern="^rc:manual$"))
+    app.add_handler(CallbackQueryHandler(rc_binance, pattern="^rc:binance$"))
     app.add_handler(CallbackQueryHandler(rc_chain, pattern=r"^rc:chain:\w+$"))
 
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
