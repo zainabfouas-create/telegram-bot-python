@@ -49,6 +49,7 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
             f"✅ بعد الدفع، أرسل <b>رقم الطلب (Order ID)</b> الظاهر في Binance."
         ),
         "binanceAmountPrompt": "أرسل المبلغ (بالدولار) الذي تريد شحنه:\n\nمثال: 50",
+        "binanceManualOrderPrompt": lambda amt: f"💰 المبلغ المطلوب: <b>{amt}</b>\n\n✅ بعد إتمام الدفع، أرسل <b>Order ID</b> الظاهر في تطبيق Binance:",
         "binanceCheckoutMsg": lambda amt, trade: (
             f"💳 المبلغ: <b>{amt}</b>\n"
             f"🔖 رقم الطلب: <code>{trade}</code>\n\n"
@@ -281,6 +282,7 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
             f"✅ After payment, send the <b>Order ID</b> shown in Binance."
         ),
         "binanceAmountPrompt": "Send the amount (in USD) you want to recharge:\n\nExample: 50",
+        "binanceManualOrderPrompt": lambda amt: f"💰 Required amount: <b>{amt}</b>\n\n✅ After completing the payment, send the <b>Order ID</b> shown in the Binance app:",
         "binanceCheckoutMsg": lambda amt, trade: (
             f"💳 Amount: <b>{amt}</b>\n"
             f"🔖 Order No: <code>{trade}</code>\n\n"
