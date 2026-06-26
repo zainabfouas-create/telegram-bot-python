@@ -49,11 +49,16 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
             f"✅ بعد الدفع، أرسل <b>رقم الطلب (Order ID)</b> الظاهر في Binance."
         ),
         "binanceAmountPrompt": "أرسل المبلغ (بالدولار) الذي تريد شحنه:\n\nمثال: 50",
-        "binanceOrderIdPrompt": "✅ تم تسجيل المبلغ. الآن أرسل <b>Order ID</b> من تطبيق Binance:",
-        "binanceNotify": lambda rid, amt, oid, client: (
-            f"🟡 طلب شحن Binance Pay #{rid}\nالقيمة: {amt}\nOrder ID: <code>{oid}</code>\nالعميل: {client}\n\n"
-            f"راجعه من «لوحة الإدارة ← طلبات الشحن»."
+        "binanceCheckoutMsg": lambda amt, trade: (
+            f"💳 المبلغ: <b>{amt}</b>\n"
+            f"🔖 رقم الطلب: <code>{trade}</code>\n\n"
+            f"👆 اضغط زر الدفع أدناه، ادفع من تطبيق Binance، ثم اضغط <b>تحقق من الدفع</b>."
         ),
+        "binancePayBtn": "💳 ادفع الآن عبر Binance",
+        "binanceCheckBtn": "✅ تحقق من الدفع",
+        "binancePaidSuccess": lambda amt: f"✅ تم تأكيد الدفع وإضافة <b>{amt}</b> لرصيدك تلقائياً!",
+        "binanceNotPaid": "⏳ لم يتم تأكيد الدفع بعد. ادفع أولاً ثم اضغط التحقق.",
+        "binancePayError": "❌ خطأ في إنشاء طلب الدفع. حاول مرة أخرى أو استخدم طريقة أخرى.",
         "starsTitle": "⭐ <b>الدفع عبر Telegram Stars</b>",
         "starsChoose": "اختر الباقة المطلوبة:",
         "starsInvoiceError": "تعذّر إنشاء فاتورة الدفع. تأكد من تفعيل مدفوعات Telegram Stars للبوت، أو استخدم التحويل اليدوي.",
@@ -276,11 +281,16 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
             f"✅ After payment, send the <b>Order ID</b> shown in Binance."
         ),
         "binanceAmountPrompt": "Send the amount (in USD) you want to recharge:\n\nExample: 50",
-        "binanceOrderIdPrompt": "✅ Amount recorded. Now send the <b>Order ID</b> from the Binance app:",
-        "binanceNotify": lambda rid, amt, oid, client: (
-            f"🟡 Binance Pay recharge request #{rid}\nAmount: {amt}\nOrder ID: <code>{oid}</code>\nClient: {client}\n\n"
-            f"Review from «Admin Panel ← Recharge Requests»."
+        "binanceCheckoutMsg": lambda amt, trade: (
+            f"💳 Amount: <b>{amt}</b>\n"
+            f"🔖 Order No: <code>{trade}</code>\n\n"
+            f"👆 Tap the Pay button below, complete payment in the Binance app, then tap <b>Check Payment</b>."
         ),
+        "binancePayBtn": "💳 Pay Now via Binance",
+        "binanceCheckBtn": "✅ Check Payment",
+        "binancePaidSuccess": lambda amt: f"✅ Payment confirmed! <b>{amt}</b> has been added to your balance automatically.",
+        "binanceNotPaid": "⏳ Payment not confirmed yet. Complete the payment first, then press Check.",
+        "binancePayError": "❌ Failed to create payment order. Please try again or use another method.",
         "starsTitle": "⭐ <b>Pay with Telegram Stars</b>",
         "starsChoose": "Choose a package:",
         "starsInvoiceError": "Failed to create payment invoice. Make sure Telegram Stars payments are enabled, or use manual transfer.",
