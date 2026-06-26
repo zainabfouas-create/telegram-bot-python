@@ -38,6 +38,22 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
         "rechargeCurrentBalance": lambda bal: f"رصيدك الحالي: {bal}\n\nاختر طريقة الشحن:",
         "starsBtn": "⭐ الدفع عبر Telegram Stars",
         "manualBtn": "👤 تحويل يدوي (عبر الإدارة)",
+        "binanceBtn": "🟡 Binance Pay",
+        "binanceTitle": "🟡 <b>الدفع عبر Binance Pay</b>",
+        "binanceInstructions": lambda mid: (
+            f"📱 <b>خطوات الدفع:</b>\n"
+            f"1. افتح تطبيق Binance\n"
+            f"2. اذهب إلى <b>Pay ← Send</b>\n"
+            f"3. ابحث عن Merchant ID: <code>{mid}</code>\n"
+            f"4. أدخل المبلغ وأكمل الدفع\n\n"
+            f"✅ بعد الدفع، أرسل <b>رقم الطلب (Order ID)</b> الظاهر في Binance."
+        ),
+        "binanceAmountPrompt": "أرسل المبلغ (بالدولار) الذي تريد شحنه:\n\nمثال: 50",
+        "binanceOrderIdPrompt": "✅ تم تسجيل المبلغ. الآن أرسل <b>Order ID</b> من تطبيق Binance:",
+        "binanceNotify": lambda rid, amt, oid, client: (
+            f"🟡 طلب شحن Binance Pay #{rid}\nالقيمة: {amt}\nOrder ID: <code>{oid}</code>\nالعميل: {client}\n\n"
+            f"راجعه من «لوحة الإدارة ← طلبات الشحن»."
+        ),
         "starsTitle": "⭐ <b>الدفع عبر Telegram Stars</b>",
         "starsChoose": "اختر الباقة المطلوبة:",
         "starsInvoiceError": "تعذّر إنشاء فاتورة الدفع. تأكد من تفعيل مدفوعات Telegram Stars للبوت، أو استخدم التحويل اليدوي.",
@@ -249,6 +265,22 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
         "rechargeCurrentBalance": lambda bal: f"Your current balance: {bal}\n\nChoose a recharge method:",
         "starsBtn": "⭐ Pay with Telegram Stars",
         "manualBtn": "👤 Manual Transfer (via admin)",
+        "binanceBtn": "🟡 Binance Pay",
+        "binanceTitle": "🟡 <b>Pay via Binance Pay</b>",
+        "binanceInstructions": lambda mid: (
+            f"📱 <b>Payment Steps:</b>\n"
+            f"1. Open the Binance app\n"
+            f"2. Go to <b>Pay ← Send</b>\n"
+            f"3. Search for Merchant ID: <code>{mid}</code>\n"
+            f"4. Enter the amount and complete the payment\n\n"
+            f"✅ After payment, send the <b>Order ID</b> shown in Binance."
+        ),
+        "binanceAmountPrompt": "Send the amount (in USD) you want to recharge:\n\nExample: 50",
+        "binanceOrderIdPrompt": "✅ Amount recorded. Now send the <b>Order ID</b> from the Binance app:",
+        "binanceNotify": lambda rid, amt, oid, client: (
+            f"🟡 Binance Pay recharge request #{rid}\nAmount: {amt}\nOrder ID: <code>{oid}</code>\nClient: {client}\n\n"
+            f"Review from «Admin Panel ← Recharge Requests»."
+        ),
         "starsTitle": "⭐ <b>Pay with Telegram Stars</b>",
         "starsChoose": "Choose a package:",
         "starsInvoiceError": "Failed to create payment invoice. Make sure Telegram Stars payments are enabled, or use manual transfer.",
