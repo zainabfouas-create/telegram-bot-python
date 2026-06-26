@@ -19,6 +19,8 @@ ETH_WALLET: str = os.getenv("ETH_WALLET_ADDRESS", "")
 ETHERSCAN_API_KEY: str = os.getenv("ETHERSCAN_API_KEY", "")
 APT_WALLET: str = os.getenv("APT_WALLET_ADDRESS", "")
 BINANCE_PAY_MERCHANT_ID: str = os.getenv("BINANCE_PAY_MERCHANT_ID", "1256890944")
+BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
+BINANCE_SECRET_KEY: str = os.getenv("BINANCE_SECRET_KEY", "")
 
 _bot_username: str = ""
 
