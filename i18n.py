@@ -50,6 +50,13 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
         ),
         "binanceAmountPrompt": "أرسل المبلغ (بالدولار) الذي تريد شحنه:\n\nمثال: 50",
         "binanceManualOrderPrompt": lambda amt: f"💰 المبلغ المطلوب: <b>{amt}</b>\n\n✅ بعد إتمام الدفع، أرسل <b>Order ID</b> الظاهر في تطبيق Binance:",
+        "binanceUniqueTransfer": lambda amt, mid: (
+            f"💰 حوّل هذا المبلغ <b>بالضبط</b> عبر Binance Pay:\n\n"
+            f"<b>{amt} USDT</b>\n\n"
+            f"📲 إلى Binance Pay ID:\n<code>{mid}</code>\n\n"
+            f"⚠️ يجب تحويل المبلغ الدقيق كما هو — المنازل العشرية مهمة للتحقق التلقائي\n\n"
+            f"بعد التحويل اضغط <b>✅ تحقق من الدفع</b>"
+        ),
         "binanceCheckoutMsg": lambda amt, trade: (
             f"💳 المبلغ: <b>{amt}</b>\n"
             f"🔖 رقم الطلب: <code>{trade}</code>\n\n"
@@ -283,6 +290,13 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
         ),
         "binanceAmountPrompt": "Send the amount (in USD) you want to recharge:\n\nExample: 50",
         "binanceManualOrderPrompt": lambda amt: f"💰 Required amount: <b>{amt}</b>\n\n✅ After completing the payment, send the <b>Order ID</b> shown in the Binance app:",
+        "binanceUniqueTransfer": lambda amt, mid: (
+            f"💰 Transfer this <b>exact</b> amount via Binance Pay:\n\n"
+            f"<b>{amt} USDT</b>\n\n"
+            f"📲 To Binance Pay ID:\n<code>{mid}</code>\n\n"
+            f"⚠️ Transfer the exact amount shown — the decimal digits are required for automatic verification\n\n"
+            f"After transferring, press <b>✅ Check Payment</b>"
+        ),
         "binanceCheckoutMsg": lambda amt, trade: (
             f"💳 Amount: <b>{amt}</b>\n"
             f"🔖 Order No: <code>{trade}</code>\n\n"
