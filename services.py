@@ -70,7 +70,7 @@ async def get_or_create_user(tg_id: int, username: str | None, first_name: str |
 
             row = await conn.fetchrow(
                 """INSERT INTO users(telegram_id, username, first_name, language, is_admin)
-                   VALUES($1,$2,$3,'ar',$4) RETURNING *""",
+                   VALUES($1,$2,$3,'en',$4) RETURNING *""",
                 tg_id, username, first_name, is_admin,
             )
             return dict(row)
