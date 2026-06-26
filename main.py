@@ -22,6 +22,7 @@ from database import init_db
 import services as svc
 from tronscan import verify_tron_tx
 from chainverify import verify_eth_tx, verify_aptos_tx
+import binancepay as bp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -513,6 +514,37 @@ async def rc_binance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     )
 
 
+async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = await ensure_user(update, context)
+    if not user:
+        return
+    await update.callback_query.answer()
+    lang = user.get("language", "ar")
+    parts = update.callback_query.data.split(":")
+    if len(parts) < 3:
+        return
+    req_id = int(parts[1])
+    trade_no = parts[2]
+
+    if not config.BINANCE_API_KEY or not config.BINANCE_SECRET_KEY:
+        await update.callback_query.answer(t(lang, "binanceNotPaid"), show_alert=True)
+        return
+
+    result = await bp.query_order(config.BINANCE_API_KEY, config.BINANCE_SECRET_KEY, trade_no)
+    if result.paid:
+        approved = await svc.approve_recharge(req_id)
+        if approved:
+            await update.callback_query.edit_message_text(
+                t(lang, "binancePaidSuccess", fmt_amount(approved["amount"])),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
+            )
+        else:
+            await update.callback_query.answer("✅ Already processed.", show_alert=True)
+    else:
+        await update.callback_query.answer(t(lang, "binanceNotPaid"), show_alert=True)
+
+
 async def rc_chain(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = await ensure_user(update, context)
     if not user:
@@ -600,26 +632,35 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             except ValueError:
                 await update.message.reply_text(t(lang, "invalidNumber"))
                 return
-            context.user_data["awaiting"] = {"action": "binance_recharge_orderid",
-                                              "data": {"amount": amount}}
-            await update.message.reply_html(t(lang, "binanceOrderIdPrompt"))
-
-        elif action == "binance_recharge_orderid":
-            order_id_str = text.strip()
-            if not order_id_str:
-                await update.message.reply_text(t(lang, "invalidNumber"))
-                return
-            amount = float(data.get("amount", 0))
             context.user_data.pop("awaiting", None)
             req = await svc.create_recharge_request(user["id"], amount, "binance")
-            await svc.set_recharge_external_ref(req["id"], order_id_str)
-            await update.message.reply_text(t(lang, "rechargeSuccess", str(req["id"]), fmt_amount(amount)))
-            await notify_admins(
-                context.bot,
-                t(lang, "binanceNotify", str(req["id"]), fmt_amount(amount),
-                  order_id_str,
-                  f"{escape_html(user.get('first_name') or '')} ({user['telegram_id']})"),
-            )
+            trade_no = f"RC{req['id']:08d}{int(__import__('time').time()) % 100000:05d}"
+            await svc.set_recharge_external_ref(req["id"], trade_no)
+
+            if config.BINANCE_API_KEY and config.BINANCE_SECRET_KEY:
+                order = await bp.create_order(config.BINANCE_API_KEY, config.BINANCE_SECRET_KEY, trade_no, amount)
+                if order.success:
+                    keyboard = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(t(lang, "binancePayBtn"), url=order.checkout_url)],
+                        [InlineKeyboardButton(t(lang, "binanceCheckBtn"), callback_data=f"binance_check:{req['id']}:{trade_no}")],
+                        [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
+                    ])
+                    await update.message.reply_html(
+                        t(lang, "binanceTitle") + "\n\n" + t(lang, "binanceCheckoutMsg", fmt_amount(amount), trade_no),
+                        reply_markup=keyboard,
+                    )
+                else:
+                    await svc.cancel_pending_recharge(req["id"])
+                    await update.message.reply_text(t(lang, "binancePayError"))
+            else:
+                # Fallback: manual confirmation (no API keys configured)
+                await update.message.reply_text(
+                    t(lang, "rechargeSuccess", str(req["id"]), fmt_amount(amount))
+                )
+                await notify_admins(
+                    context.bot,
+                    f"🟡 Binance Pay #{req['id']}\nAmount: {fmt_amount(amount)}\nTrade No: <code>{trade_no}</code>\nClient: {escape_html(user.get('first_name') or '')} ({user['telegram_id']})",
+                )
 
         elif action == "manual_recharge_amount":
             try:
@@ -1619,6 +1660,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(rcstars_amount, pattern=r"^rcstars:\d+$"))
     app.add_handler(CallbackQueryHandler(rc_manual, pattern="^rc:manual$"))
     app.add_handler(CallbackQueryHandler(rc_binance, pattern="^rc:binance$"))
+    app.add_handler(CallbackQueryHandler(check_binance_payment, pattern=r"^binance_check:\d+:\w+$"))
     app.add_handler(CallbackQueryHandler(rc_chain, pattern=r"^rc:chain:\w+$"))
 
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
