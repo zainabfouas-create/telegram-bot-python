@@ -49,7 +49,18 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
             f"✅ بعد الدفع، أرسل <b>رقم الطلب (Order ID)</b> الظاهر في Binance."
         ),
         "binanceAmountPrompt": "أرسل المبلغ (بالدولار) الذي تريد شحنه:\n\nمثال: 50",
+        "binanceNoteInstructions": lambda amt, mid, ref: (
+            f"📋 <b>خطوات الدفع التلقائي:</b>\n\n"
+            f"1️⃣ افتح تطبيق <b>Binance</b>\n"
+            f"2️⃣ اذهب إلى <b>Pay → Send</b>\n"
+            f"3️⃣ ابحث عن Merchant ID:\n   <code>{mid}</code>\n"
+            f"4️⃣ أدخل المبلغ: <b>{amt} USDT</b>\n"
+            f"5️⃣ في خانة <b>Note / ملاحظة</b> اكتب:\n   <code>{ref}</code>\n\n"
+            f"⚠️ <b>مهم:</b> يجب كتابة الكود بالضبط في خانة Note لتأكيد الدفع تلقائياً.\n\n"
+            f"بعد إتمام التحويل اضغط ✅ تحقق من الدفع"
+        ),
         "binanceManualOrderPrompt": lambda amt: f"💰 المبلغ المطلوب: <b>{amt}</b>\n\n✅ بعد إتمام الدفع، أرسل <b>Order ID</b> الظاهر في تطبيق Binance:",
+        "binanceAmountMismatch": lambda found, expected: f"⚠️ وجدنا دفعة بكود صحيح لكن المبلغ مختلف.\n\nالمبلغ المُرسَل: <b>{found}</b>\nالمبلغ المطلوب: <b>{expected}</b>\n\nتواصل مع الدعم أو حاول مجدداً.",
         "binanceUniqueTransfer": lambda amt, mid: (
             f"💰 حوّل هذا المبلغ <b>بالضبط</b> عبر Binance Pay:\n\n"
             f"<b>{amt} USDT</b>\n\n"
@@ -295,7 +306,18 @@ TRANSLATIONS: dict[str, dict[str, Any]] = {
             f"✅ After payment, send the <b>Order ID</b> shown in Binance."
         ),
         "binanceAmountPrompt": "Send the amount (in USD) you want to recharge:\n\nExample: 50",
+        "binanceNoteInstructions": lambda amt, mid, ref: (
+            f"📋 <b>Auto-Payment Steps:</b>\n\n"
+            f"1️⃣ Open the <b>Binance</b> app\n"
+            f"2️⃣ Go to <b>Pay → Send</b>\n"
+            f"3️⃣ Search for Merchant ID:\n   <code>{mid}</code>\n"
+            f"4️⃣ Enter amount: <b>{amt} USDT</b>\n"
+            f"5️⃣ In the <b>Note</b> field write:\n   <code>{ref}</code>\n\n"
+            f"⚠️ <b>Important:</b> You must write the code exactly in the Note field for automatic confirmation.\n\n"
+            f"After completing the transfer press ✅ Check Payment"
+        ),
         "binanceManualOrderPrompt": lambda amt: f"💰 Required amount: <b>{amt}</b>\n\n✅ After completing the payment, send the <b>Order ID</b> shown in the Binance app:",
+        "binanceAmountMismatch": lambda found, expected: f"⚠️ Found a transaction with the correct code but amount doesn't match.\n\nAmount sent: <b>{found}</b>\nRequired amount: <b>{expected}</b>\n\nContact support or try again.",
         "binanceUniqueTransfer": lambda amt, mid: (
             f"💰 Transfer this <b>exact</b> amount via Binance Pay:\n\n"
             f"<b>{amt} USDT</b>\n\n"
