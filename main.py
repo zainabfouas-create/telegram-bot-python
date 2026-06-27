@@ -79,6 +79,16 @@ async def notify_admins(bot, text: str) -> None:
             pass
 
 
+async def notify_channel(bot, text: str) -> None:
+    channel = await svc.get_required_channel()
+    if not channel:
+        return
+    try:
+        await bot.send_message(channel, text, parse_mode=ParseMode.HTML)
+    except Exception:
+        pass
+
+
 def get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
     return context.user_data.get("lang", "ar")
 
@@ -383,6 +393,12 @@ async def buy_product(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                      escape_html(result["content"] or ""),
                      fmt_amount(result["new_balance"]))
             await safe_edit(update, text, InlineKeyboardMarkup([[back_button("menu:main", lang)]]))
+            await notify_channel(
+                context.bot,
+                t("ar", "channelPurchase",
+                  escape_html(user.get("first_name") or "مستخدم"),
+                  escape_html(product["name"] if product else "")),
+            )
             # Confirm referral after first successful purchase
             try:
                 ref_result = await svc.confirm_referral(user["id"])
@@ -556,6 +572,12 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
             )
+            await notify_channel(
+                context.bot,
+                t("ar", "channelRecharge",
+                  escape_html(user.get("first_name") or "مستخدم"),
+                  fmt_amount(approved["amount"]), "🟡 Binance Pay"),
+            )
         else:
             await update.callback_query.answer("✅ Already processed.", show_alert=True)
     else:
@@ -618,6 +640,12 @@ async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text(
             t(lang, "paymentSuccess", fmt_amount(result["credits"]), fmt_amount(result["new_balance"]))
+        )
+        await notify_channel(
+            context.bot,
+            t("ar", "channelRecharge",
+              escape_html(user.get("first_name") or "مستخدم"),
+              fmt_amount(result["credits"]), "⭐ Telegram Stars"),
         )
 
 
@@ -798,6 +826,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 if not approve_result:
                     await update.message.reply_text(t(lang, "processedAlready"))
                     return
+                await notify_channel(
+                    context.bot,
+                    t("ar", "channelRecharge",
+                      escape_html(user.get("first_name") or "مستخدم"),
+                      fmt_amount(amount), f"💎 {chain_key.upper()}"),
+                )
                 await update.message.reply_html(
                     t(lang, "chainRechargeSuccess") + "\n\n" +
                     t(lang, "chainRechargeAmount") + ": " + fmt_amount(amount) + "\n" +
@@ -1533,6 +1567,12 @@ async def adm_rechapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
         except Exception:
             pass
+        await notify_channel(
+            context.bot,
+            t("ar", "channelRecharge",
+              escape_html(result.get("first_name") or "مستخدم"),
+              fmt_amount(result["amount"]), "👤 تحويل يدوي"),
+        )
         await safe_edit(update, t(lang, "adminRechargeApproved"), InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "back"), callback_data="adm:main")]]))
 
 
