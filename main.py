@@ -738,30 +738,16 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await svc.set_recharge_external_ref(req["id"], reference)
 
             mid = config.BINANCE_PAY_MERCHANT_ID
-            if config.BINANCE_API_KEY and config.BINANCE_SECRET_KEY:
-                # Auto flow via Note: user adds reference in Note field, bot verifies
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(t(lang, "binanceCheckBtn"),
-                                         callback_data=f"binance_check:{req['id']}:{start_time_s}")],
-                    [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
-                ])
-                await update.message.reply_html(
-                    t(lang, "binanceTitle") + "\n\n" +
-                    t(lang, "binanceNoteInstructions", fmt_amount(amount), mid, reference),
-                    reply_markup=keyboard,
-                )
-            else:
-                # Manual flow: user submits Order ID, admin approves
-                context.user_data["awaiting"] = {
-                    "action": "binance_recharge_orderid",
-                    "data": {"req_id": req["id"], "amount": amount},
-                }
-                await update.message.reply_html(
-                    t(lang, "binanceTitle") + "\n\n" +
-                    t(lang, "binanceInstructions", mid) + "\n\n" +
-                    t(lang, "binanceManualOrderPrompt", fmt_amount(amount)),
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
-                )
+            context.user_data["awaiting"] = {
+                "action": "binance_recharge_orderid",
+                "data": {"req_id": req["id"], "amount": amount},
+            }
+            await update.message.reply_html(
+                t(lang, "binanceTitle") + "\n\n" +
+                t(lang, "binanceInstructions", mid) + "\n\n" +
+                t(lang, "binanceManualOrderPrompt", fmt_amount(amount)),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
+            )
 
         elif action == "binance_recharge_orderid":
             order_id_str = text.strip()
