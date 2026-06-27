@@ -560,82 +560,25 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     req_id = int(parts[1])
-    start_time_s = int(parts[2])
-    start_time_ms = start_time_s * 1000
 
-    if not config.BINANCE_API_KEY or not config.BINANCE_SECRET_KEY:
-        await update.callback_query.answer(t(lang, "binanceNotPaid"), show_alert=True)
-        return
-
-    # Fetch reference and amount from DB
     recharge = await svc.get_recharge(req_id)
     if not recharge:
         await update.callback_query.answer(t(lang, "error"), show_alert=True)
         return
 
-    reference = recharge.get("external_ref") or bapi.make_reference(req_id)
     expected_amount = float(recharge.get("amount", 0))
 
-    # Show spinner
-    await update.callback_query.answer("⏳ " + ("جاري التحقق..." if lang == "ar" else "Verifying..."))
-
-    result = await bapi.verify_payment_by_note(
-        config.BINANCE_API_KEY, config.BINANCE_SECRET_KEY,
-        reference, expected_amount, start_time_ms,
+    # Ask user to send their Order ID for manual admin approval
+    context.user_data["awaiting"] = {
+        "action": "binance_recharge_orderid",
+        "data": {"req_id": req_id, "amount": expected_amount},
+    }
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(
+        t(lang, "binanceManualOrderPrompt", fmt_amount(expected_amount)),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
     )
-
-    if result.verified:
-        approved = await svc.approve_recharge(req_id)
-        if approved:
-            await update.callback_query.edit_message_text(
-                t(lang, "binancePaidSuccess", fmt_amount(approved["amount"])),
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
-            )
-            await notify_channel(
-                context.bot,
-                t("en", "channelRecharge",
-                  escape_html(user.get("first_name") or "User"),
-                  fmt_amount(approved["amount"]), "🟡 Binance Pay"),
-            )
-        else:
-            await update.callback_query.edit_message_text(
-                "✅ " + ("تمت معالجة هذا الطلب مسبقاً." if lang == "ar" else "Already processed."),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
-            )
-    elif result.error == "geo_blocked":
-        # Binance API blocked from this server — silently switch to manual flow
-        context.user_data["awaiting"] = {
-            "action": "binance_recharge_orderid",
-            "data": {"req_id": req_id, "amount": expected_amount},
-        }
-        mid = config.BINANCE_PAY_MERCHANT_ID
-        await update.callback_query.edit_message_text(
-            t(lang, "binanceTitle") + "\n\n" +
-            t(lang, "binanceInstructions", mid) + "\n\n" +
-            t(lang, "binanceManualOrderPrompt", fmt_amount(expected_amount)),
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
-        )
-    elif result.error and result.error.startswith("amount_mismatch"):
-        found = result.error.split(":")[1] if ":" in result.error else "?"
-        await update.callback_query.edit_message_text(
-            t(lang, "binanceAmountMismatch", found, fmt_amount(expected_amount)),
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(t(lang, "binanceCheckBtn"), callback_data=update.callback_query.data)],
-                [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
-            ]),
-        )
-    else:
-        await update.callback_query.edit_message_text(
-            t(lang, "binanceNotPaid"),
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(t(lang, "binanceCheckBtn"), callback_data=update.callback_query.data)],
-                [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
-            ]),
-        )
 
 
 async def rc_chain(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -738,15 +681,15 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await svc.set_recharge_external_ref(req["id"], reference)
 
             mid = config.BINANCE_PAY_MERCHANT_ID
-            context.user_data["awaiting"] = {
-                "action": "binance_recharge_orderid",
-                "data": {"req_id": req["id"], "amount": amount},
-            }
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(t(lang, "binanceCheckBtn"),
+                                     callback_data=f"binance_check:{req['id']}:{start_time_s}")],
+                [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
+            ])
             await update.message.reply_html(
                 t(lang, "binanceTitle") + "\n\n" +
-                t(lang, "binanceInstructions", mid) + "\n\n" +
-                t(lang, "binanceManualOrderPrompt", fmt_amount(amount)),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
+                t(lang, "binanceNoteInstructions", fmt_amount(amount), mid, reference),
+                reply_markup=keyboard,
             )
 
         elif action == "binance_recharge_orderid":
