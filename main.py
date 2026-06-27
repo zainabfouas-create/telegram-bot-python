@@ -164,6 +164,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if referrer_tg_id and referrer_tg_id != user["telegram_id"]:
         await svc.process_referral(user["id"], referrer_tg_id)
         # Reward is sent to referrer only after referred user makes a purchase
+        await notify_channel(
+            context.bot,
+            t("en", "channelReferral",
+              escape_html(user.get("first_name") or "User")),
+        )
 
     if not await check_channel(update, context, user):
         return
@@ -282,7 +287,15 @@ async def menu_referral(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         t(lang, "referralLinkLabel") + "\n" +
         f"<code>{ref_link}</code>"
     )
-    await safe_edit(update, text, InlineKeyboardMarkup([[back_button("menu:main", lang)]]))
+    share_url = f"https://t.me/share/url?url={ref_link}&text=" + (
+        "انضم+للبوت+واحصل+على+خدمات+رقمية+بأسعار+رائعة%21" if lang == "ar"
+        else "Join+the+bot+and+get+digital+services+at+great+prices%21"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📤 " + t(lang, "referralShare"), url=share_url)],
+        [back_button("menu:main", lang)],
+    ])
+    await safe_edit(update, text, keyboard)
 
 
 # ── Shop ──────────────────────────────────────────────────────────────────────
@@ -395,8 +408,8 @@ async def buy_product(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await safe_edit(update, text, InlineKeyboardMarkup([[back_button("menu:main", lang)]]))
             await notify_channel(
                 context.bot,
-                t("ar", "channelPurchase",
-                  escape_html(user.get("first_name") or "مستخدم"),
+                t("en", "channelPurchase",
+                  escape_html(user.get("first_name") or "User"),
                   escape_html(product["name"] if product else "")),
             )
             # Confirm referral after first successful purchase
@@ -574,8 +587,8 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
             )
             await notify_channel(
                 context.bot,
-                t("ar", "channelRecharge",
-                  escape_html(user.get("first_name") or "مستخدم"),
+                t("en", "channelRecharge",
+                  escape_html(user.get("first_name") or "User"),
                   fmt_amount(approved["amount"]), "🟡 Binance Pay"),
             )
         else:
@@ -643,8 +656,8 @@ async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         await notify_channel(
             context.bot,
-            t("ar", "channelRecharge",
-              escape_html(user.get("first_name") or "مستخدم"),
+            t("en", "channelRecharge",
+              escape_html(user.get("first_name") or "User"),
               fmt_amount(result["credits"]), "⭐ Telegram Stars"),
         )
 
@@ -828,8 +841,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     return
                 await notify_channel(
                     context.bot,
-                    t("ar", "channelRecharge",
-                      escape_html(user.get("first_name") or "مستخدم"),
+                    t("en", "channelRecharge",
+                      escape_html(user.get("first_name") or "User"),
                       fmt_amount(amount), f"💎 {chain_key.upper()}"),
                 )
                 await update.message.reply_html(
@@ -1569,9 +1582,9 @@ async def adm_rechapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             pass
         await notify_channel(
             context.bot,
-            t("ar", "channelRecharge",
-              escape_html(result.get("first_name") or "مستخدم"),
-              fmt_amount(result["amount"]), "👤 تحويل يدوي"),
+            t("en", "channelRecharge",
+              escape_html(result.get("first_name") or "User"),
+              fmt_amount(result["amount"]), "👤 Manual Transfer"),
         )
         await safe_edit(update, t(lang, "adminRechargeApproved"), InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "back"), callback_data="adm:main")]]))
 
