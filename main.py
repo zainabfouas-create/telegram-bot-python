@@ -603,6 +603,20 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
                 "✅ " + ("تمت معالجة هذا الطلب مسبقاً." if lang == "ar" else "Already processed."),
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
             )
+    elif result.error == "geo_blocked":
+        # Binance API blocked from this server — silently switch to manual flow
+        context.user_data["awaiting"] = {
+            "action": "binance_recharge_orderid",
+            "data": {"req_id": req_id, "amount": expected_amount},
+        }
+        mid = config.BINANCE_PAY_MERCHANT_ID
+        await update.callback_query.edit_message_text(
+            t(lang, "binanceTitle") + "\n\n" +
+            t(lang, "binanceInstructions", mid) + "\n\n" +
+            t(lang, "binanceManualOrderPrompt", fmt_amount(expected_amount)),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
+        )
     elif result.error and result.error.startswith("amount_mismatch"):
         found = result.error.split(":")[1] if ":" in result.error else "?"
         await update.callback_query.edit_message_text(
@@ -614,11 +628,8 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
             ]),
         )
     else:
-        extra = ""
-        if result.error and result.error not in ("not_found", "No matching transaction found"):
-            extra = f"\n\n<code>{escape_html(result.error)}</code>"
         await update.callback_query.edit_message_text(
-            t(lang, "binanceNotPaid") + extra,
+            t(lang, "binanceNotPaid"),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(t(lang, "binanceCheckBtn"), callback_data=update.callback_query.data)],
