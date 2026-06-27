@@ -552,26 +552,25 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
     user = await ensure_user(update, context)
     if not user:
         return
-    await update.callback_query.answer()
     lang = user.get("language", "ar")
     parts = update.callback_query.data.split(":")
-    if len(parts) < 3:
-        return
-    req_id = int(parts[1])
-    trade_no = parts[2]
-
-    if not config.BINANCE_API_KEY or not config.BINANCE_SECRET_KEY:
-        await update.callback_query.answer(t(lang, "binanceNotPaid"), show_alert=True)
-        return
-
-    parts = update.callback_query.data.split(":")
+    # expected: binance_check:{req_id}:{unique_cents}:{start_time_s}
     if len(parts) < 4:
+        await update.callback_query.answer(t(lang, "error"), show_alert=True)
         return
+
     req_id = int(parts[1])
     unique_cents = int(parts[2])
     start_time_s = int(parts[3])
     unique_amount = unique_cents / 100.0
     start_time_ms = start_time_s * 1000
+
+    if not config.BINANCE_API_KEY or not config.BINANCE_SECRET_KEY:
+        await update.callback_query.answer(t(lang, "binanceNotPaid"), show_alert=True)
+        return
+
+    # Show spinner while verifying
+    await update.callback_query.answer("⏳ " + ("جاري التحقق..." if lang == "ar" else "Verifying..."))
 
     result = await bapi.verify_payment(
         config.BINANCE_API_KEY, config.BINANCE_SECRET_KEY,
@@ -592,9 +591,20 @@ async def check_binance_payment(update: Update, context: ContextTypes.DEFAULT_TY
                   fmt_amount(approved["amount"]), "🟡 Binance Pay"),
             )
         else:
-            await update.callback_query.answer("✅ Already processed.", show_alert=True)
+            await update.callback_query.edit_message_text(
+                "✅ " + ("تمت معالجة هذا الطلب مسبقاً." if lang == "ar" else "Already processed."),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")]]),
+            )
     else:
-        await update.callback_query.answer(t(lang, "binanceNotPaid"), show_alert=True)
+        err_detail = f"\n<code>{result.error}</code>" if result.error and result.error != "No matching transaction found" else ""
+        await update.callback_query.edit_message_text(
+            t(lang, "binanceNotPaid") + err_detail,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(t(lang, "binanceCheckBtn"), callback_data=update.callback_query.data)],
+                [InlineKeyboardButton(t(lang, "mainMenu"), callback_data="menu:main")],
+            ]),
+        )
 
 
 async def rc_chain(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
