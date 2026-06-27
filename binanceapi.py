@@ -60,7 +60,8 @@ async def verify_payment_by_note(
 
         if str(data.get("code", "")) != "000000":
             err = data.get("msg") or str(data.get("code", "Unknown"))
-            return VerifyResult(verified=False, error=err)
+            geo_blocked = "restricted location" in err.lower() or "eligibility" in err.lower()
+            return VerifyResult(verified=False, error="geo_blocked" if geo_blocked else err)
 
         ref_lower = reference.lower()
 
