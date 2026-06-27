@@ -102,14 +102,18 @@ async def check_channel(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     if not channel:
         return True
     lang = user.get("language", "ar")
+    is_member = False
     try:
         member = await context.bot.get_chat_member(channel, user["telegram_id"])
         if member.status in ("member", "administrator", "creator"):
-            return True
+            is_member = True
     except Exception:
+        is_member = False
+    if is_member:
         return True
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton(t(lang, "channelJoin"), url=f"https://t.me/{channel.lstrip('@')}")],
+        [InlineKeyboardButton(t(lang, "channelCheck"), callback_data="channel:check")],
     ])
     msg = t(lang, "channelRequired", channel)
     if update.callback_query:
@@ -1059,6 +1063,32 @@ async def adm_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await safe_edit(update, t(lang, "adminChannelTitle") + "\n\n" + status_line, InlineKeyboardMarkup(rows))
 
 
+async def channel_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = await ensure_user(update, context)
+    if not user:
+        return
+    lang = user.get("language", "ar")
+    channel = await svc.get_required_channel()
+    if not channel:
+        await update.callback_query.answer()
+        await menu_main(update, context)
+        return
+    is_member = False
+    try:
+        member = await context.bot.get_chat_member(channel, user["telegram_id"])
+        if member.status in ("member", "administrator", "creator"):
+            is_member = True
+    except Exception:
+        is_member = False
+    if is_member:
+        await update.callback_query.answer("✅")
+        context.user_data.pop("awaiting", None)
+        name = escape_html(user.get("first_name") or t(lang, "friend"))
+        await safe_edit(update, t(lang, "welcome", name), main_menu_keyboard(user))
+    else:
+        await update.callback_query.answer(t(lang, "channelNotJoined"), show_alert=True)
+
+
 async def adm_channel_set(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = await ensure_user(update, context)
     if not user or not user.get("is_admin"):
@@ -1703,6 +1733,7 @@ def main() -> None:
     app.add_handler(PreCheckoutQueryHandler(pre_checkout))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
 
+    app.add_handler(CallbackQueryHandler(channel_check, pattern="^channel:check$"))
     app.add_handler(CallbackQueryHandler(adm_main, pattern="^adm:main$"))
     app.add_handler(CallbackQueryHandler(adm_channel, pattern="^adm:channel$"))
     app.add_handler(CallbackQueryHandler(adm_channel_set, pattern="^adm:channel:set$"))
