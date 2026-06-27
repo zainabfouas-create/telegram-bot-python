@@ -25,9 +25,12 @@ def _sign(secret_key: str, query: str) -> str:
 
 
 def generate_unique_amount(base_amount: float) -> float:
-    """Add random cents (01–99) to make the amount uniquely identifiable."""
-    cents = random.randint(1, 99)
-    return round(int(base_amount) + cents / 100, 2)
+    """Make amount uniquely identifiable by setting the last cent digit (1-9)."""
+    # Round base to 1 decimal, then append a unique second decimal digit
+    # e.g. 1.9 -> 1.91..1.99  |  50 -> 50.01..50.09  |  10.5 -> 10.51..10.59
+    base = round(base_amount, 1)
+    unique_cent = random.randint(1, 9) / 100  # 0.01 – 0.09
+    return round(base + unique_cent, 2)
 
 
 async def verify_payment(
