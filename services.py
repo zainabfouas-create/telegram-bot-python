@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncpg
 from database import get_pool
-from config import ADMIN_TELEGRAM_ID, REFERRAL_MILESTONE, REFERRAL_REWARD, STAR_TO_CREDIT
+from config import ADMIN_TELEGRAM_ID, REFERRAL_MILESTONE, REFERRAL_REWARD, STAR_TO_CREDIT, DEFAULT_REQUIRED_CHANNEL
 import time
 
 
@@ -38,6 +38,8 @@ async def get_required_channel() -> str | None:
     if _channel_cache["expires_at"] > now:
         return _channel_cache["value"]
     value = await get_setting("required_channel")
+    if not value and DEFAULT_REQUIRED_CHANNEL:
+        value = DEFAULT_REQUIRED_CHANNEL
     _channel_cache["value"] = value
     _channel_cache["expires_at"] = now + 60
     return value
