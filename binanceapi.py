@@ -26,8 +26,6 @@ def _sign(secret_key: str, query: str) -> str:
 
 def generate_unique_amount(base_amount: float) -> float:
     """Make amount uniquely identifiable by setting the last cent digit (1-9)."""
-    # Round base to 1 decimal, then append a unique second decimal digit
-    # e.g. 1.9 -> 1.91..1.99  |  50 -> 50.01..50.09  |  10.5 -> 10.51..10.59
     base = round(base_amount, 1)
     unique_cent = random.randint(1, 9) / 100  # 0.01 – 0.09
     return round(base + unique_cent, 2)
@@ -42,6 +40,10 @@ async def verify_payment(
     """
     Query Binance Pay transaction history and look for a received USDT/BUSD
     payment matching expected_amount (±0.005) since start_time_ms.
+
+    Binance Pay /sapi/v1/pay/transactions returns:
+      { "code": "000000", "data": [ { "transactionStatus": "SUCCESS",
+        "currency": "USDT", "orderAmount": "10.00", "transactionId": "..." } ] }
     """
     ts = int(time.time() * 1000)
     end_time_ms = ts
@@ -59,24 +61,43 @@ async def verify_payment(
             return VerifyResult(verified=False, error=err)
 
         for tx in data.get("data", []):
-            funds = tx.get("fundsDetail") or []
-            if not isinstance(funds, list):
-                funds = [funds]
+            # Skip non-successful transactions
+            status = (tx.get("transactionStatus") or "").upper()
+            if status not in ("SUCCESS", ""):
+                continue
 
-            for fund in funds:
-                currency = (fund.get("currency") or "").upper()
-                if currency not in ("USDT", "BUSD", "USD"):
-                    continue
-                try:
-                    amt = float(fund.get("amount", 0))
-                except (TypeError, ValueError):
-                    continue
+            currency = (tx.get("currency") or "").upper()
+            if currency not in ("USDT", "BUSD", "USD"):
+                # Also check fundsDetail as fallback
+                funds = tx.get("fundsDetail") or []
+                if not isinstance(funds, list):
+                    funds = [funds]
+                for fund in funds:
+                    fund_currency = (fund.get("currency") or "").upper()
+                    if fund_currency not in ("USDT", "BUSD", "USD"):
+                        continue
+                    try:
+                        amt = float(fund.get("amount", 0))
+                    except (TypeError, ValueError):
+                        continue
+                    if abs(amt - expected_amount) <= 0.005:
+                        return VerifyResult(
+                            verified=True,
+                            transaction_id=tx.get("transactionId", ""),
+                        )
+                continue
 
-                if abs(amt - expected_amount) <= 0.005:
-                    return VerifyResult(
-                        verified=True,
-                        transaction_id=tx.get("transactionId", ""),
-                    )
+            # Primary: check orderAmount at top level
+            try:
+                amt = float(tx.get("orderAmount", 0))
+            except (TypeError, ValueError):
+                continue
+
+            if abs(amt - expected_amount) <= 0.005:
+                return VerifyResult(
+                    verified=True,
+                    transaction_id=tx.get("transactionId", ""),
+                )
 
         return VerifyResult(verified=False, error="No matching transaction found")
 
