@@ -1,22 +1,26 @@
 """
 Regular Binance account API (binance.com) — Pay transaction verification.
 Requires API key with 'Binance Pay' read permission enabled.
+
+Verification strategy: user adds a unique reference code (e.g. RC1234) in the
+Note/Remarks field of their Binance Pay transfer.  The bot searches the merchant's
+recent transactions for that reference and verifies the amount matches.
 """
 import hmac
 import hashlib
 import time
-import random
 import httpx
 from dataclasses import dataclass
 
 BASE_URL = "https://api.binance.com"
-VERIFY_WINDOW_MS = 60 * 60 * 1000  # 1 hour
+VERIFY_WINDOW_MS = 3 * 60 * 60 * 1000  # 3 hours
 
 
 @dataclass
 class VerifyResult:
     verified: bool
     transaction_id: str = ""
+    amount_found: float = 0.0
     error: str = ""
 
 
@@ -24,30 +28,28 @@ def _sign(secret_key: str, query: str) -> str:
     return hmac.new(secret_key.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def generate_unique_amount(base_amount: float) -> float:
-    """Make amount uniquely identifiable by setting the last cent digit (1-9)."""
-    base = round(base_amount, 1)
-    unique_cent = random.randint(1, 9) / 100  # 0.01 – 0.09
-    return round(base + unique_cent, 2)
+def make_reference(req_id: int) -> str:
+    """Short, easy-to-type reference code the user writes in the Note field."""
+    return f"RC{req_id}"
 
 
-async def verify_payment(
+async def verify_payment_by_note(
     api_key: str,
     secret_key: str,
+    reference: str,
     expected_amount: float,
     start_time_ms: int,
 ) -> VerifyResult:
     """
-    Query Binance Pay transaction history and look for a received USDT/BUSD
-    payment matching expected_amount (±0.005) since start_time_ms.
+    Search Binance Pay transaction history for a transaction whose
+    note/remarks field contains `reference` and whose amount matches
+    expected_amount (±2% to cover minor fees/rounding).
 
-    Binance Pay /sapi/v1/pay/transactions returns:
-      { "code": "000000", "data": [ { "transactionStatus": "SUCCESS",
-        "currency": "USDT", "orderAmount": "10.00", "transactionId": "..." } ] }
+    Binance Pay /sapi/v1/pay/transactions response per item:
+      transactionStatus, currency, orderAmount, note, remarks, transactionId …
     """
     ts = int(time.time() * 1000)
-    end_time_ms = ts
-    params = f"startTime={start_time_ms}&endTime={end_time_ms}&limit=100&timestamp={ts}"
+    params = f"startTime={start_time_ms}&endTime={ts}&limit=100&timestamp={ts}"
     sig = _sign(secret_key, params)
     url = f"{BASE_URL}/sapi/v1/pay/transactions?{params}&signature={sig}"
 
@@ -60,46 +62,58 @@ async def verify_payment(
             err = data.get("msg") or str(data.get("code", "Unknown"))
             return VerifyResult(verified=False, error=err)
 
+        ref_lower = reference.lower()
+
         for tx in data.get("data", []):
-            # Skip non-successful transactions
             status = (tx.get("transactionStatus") or "").upper()
-            if status not in ("SUCCESS", ""):
+            if status and status != "SUCCESS":
                 continue
 
+            # Check note / remarks / memo field (Binance uses different names)
+            note_value = ""
+            for field in ("note", "remarks", "remark", "memo", "description"):
+                val = tx.get(field) or ""
+                if val:
+                    note_value = str(val)
+                    break
+
+            if ref_lower not in note_value.lower():
+                continue
+
+            # Reference found — verify currency and amount
             currency = (tx.get("currency") or "").upper()
-            if currency not in ("USDT", "BUSD", "USD"):
-                # Also check fundsDetail as fallback
+            if currency not in ("USDT", "BUSD", "USD", ""):
+                # Check fundsDetail fallback
                 funds = tx.get("fundsDetail") or []
                 if not isinstance(funds, list):
                     funds = [funds]
-                for fund in funds:
-                    fund_currency = (fund.get("currency") or "").upper()
-                    if fund_currency not in ("USDT", "BUSD", "USD"):
-                        continue
-                    try:
-                        amt = float(fund.get("amount", 0))
-                    except (TypeError, ValueError):
-                        continue
-                    if abs(amt - expected_amount) <= 0.005:
-                        return VerifyResult(
-                            verified=True,
-                            transaction_id=tx.get("transactionId", ""),
-                        )
-                continue
+                matched = any(
+                    (f.get("currency") or "").upper() in ("USDT", "BUSD", "USD")
+                    for f in funds
+                )
+                if not matched:
+                    continue
 
-            # Primary: check orderAmount at top level
             try:
                 amt = float(tx.get("orderAmount", 0))
             except (TypeError, ValueError):
-                continue
+                amt = 0.0
 
-            if abs(amt - expected_amount) <= 0.005:
+            # Allow ±2% tolerance for fees
+            if expected_amount > 0 and abs(amt - expected_amount) / expected_amount > 0.02:
                 return VerifyResult(
-                    verified=True,
-                    transaction_id=tx.get("transactionId", ""),
+                    verified=False,
+                    amount_found=amt,
+                    error=f"amount_mismatch:{amt}",
                 )
 
-        return VerifyResult(verified=False, error="No matching transaction found")
+            return VerifyResult(
+                verified=True,
+                transaction_id=tx.get("transactionId", ""),
+                amount_found=amt,
+            )
+
+        return VerifyResult(verified=False, error="not_found")
 
     except Exception as e:
         return VerifyResult(verified=False, error=str(e))
